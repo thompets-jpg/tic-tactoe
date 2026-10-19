@@ -1,0 +1,596 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tic-Tac-Toe gegen die KI</title>
+<meta name="description" content="Tic-Tac-Toe gegen eine KI mit drei Schwierigkeitsstufen. Funktioniert auch offline.">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f8fafc" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#13171c" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Tic-Tac-Toe">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Gochi+Hand&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: eine Seite Karopapier. Handgeschriebener Titel, mit Bleistift gezogenes 3×3-Feld, Punkte als Strichliste. Handy: eine Spalte; breit: Feld links, Seitenleiste rechts. */
+:root{
+  --paper:#f8fafc;
+  --grid:#d5e1ec;
+  --graphite:#252b32;
+  --muted:#5b6672;
+  --you:#1c4ec2;
+  --ai:#cc3427;
+  --rule:#e9aea8;
+  --font-hand:"Gochi Hand","Segoe Print","Bradley Hand","Chalkboard SE",cursive;
+  --font-body:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --karo:22px;
+  color-scheme:light;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  -webkit-text-size-adjust:100%;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#13171c;--grid:#1f262e;--graphite:#e2e6eb;--muted:#97a3af;
+    --you:#88affd;--ai:#ff8b7c;--rule:#5e3434;color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#13171c;--grid:#1f262e;--graphite:#e2e6eb;--muted:#97a3af;
+  --you:#88affd;--ai:#ff8b7c;--rule:#5e3434;color-scheme:dark;
+}
+[hidden]{display:none!important}
+
+html{background-color:var(--paper)}
+html,body{min-height:100%}
+body{
+  margin:0;
+  background-color:var(--paper);
+  background-image:
+    linear-gradient(var(--grid) 1px,transparent 1px),
+    linear-gradient(90deg,var(--grid) 1px,transparent 1px);
+  background-size:var(--karo) var(--karo);
+  color:var(--graphite);
+  font-family:var(--font-body);
+  font-size:16px;
+  line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:20px 40px;
+  -webkit-tap-highlight-color:transparent;
+}
+body::after{
+  content:"";position:fixed;top:0;bottom:0;left:calc(50% - 500px);
+  width:2px;background:var(--rule);pointer-events:none;display:none;
+}
+@media (min-width:1080px){body::after{display:block}}
+
+.page{max-width:900px;margin:0 auto;display:grid;gap:18px}
+
+.head{display:grid;gap:4px}
+h1{
+  font-family:var(--font-hand);font-weight:400;
+  font-size:clamp(2.75rem,11vw,4rem);line-height:1;margin:0;
+  text-wrap:balance;letter-spacing:.01em;
+}
+.matchup{margin:0;color:var(--muted);display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-size:.95rem}
+.tag{display:inline-flex;align-items:center;gap:4px;font-weight:700}
+.tag svg{width:1.05em;height:1.05em;overflow:visible}
+.tag svg path{fill:none;stroke-width:12;stroke-linecap:round}
+.tag.t-you{color:var(--you)} .tag.t-you path{stroke:var(--you)}
+.tag.t-ai{color:var(--ai)} .tag.t-ai path{stroke:var(--ai)}
+
+.layout{display:grid;gap:22px}
+@media (min-width:860px){
+  .layout{grid-template-columns:minmax(0,1fr) 300px;align-items:start;gap:40px}
+}
+
+.play{display:grid;gap:10px;min-width:0}
+.status{
+  font-family:var(--font-hand);font-size:1.7rem;line-height:1.15;margin:0;
+  min-height:1.2em;
+}
+.status.s-you{color:var(--you)}
+.status.s-ai{color:var(--ai)}
+.dots span{animation:blink 1.2s infinite both}
+.dots span:nth-child(2){animation-delay:.2s}
+.dots span:nth-child(3){animation-delay:.4s}
+@keyframes blink{0%,80%,100%{opacity:.15}40%{opacity:1}}
+.hint{margin:0;color:var(--muted);font-size:.92rem;max-width:42ch;min-height:2.8em}
+
+.board{position:relative;width:min(100%,460px);aspect-ratio:1/1;max-width:100%;margin-top:6px}
+.lines,.winsvg{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+.lines path{
+  fill:none;stroke:var(--graphite);stroke-width:3.2;stroke-linecap:round;opacity:.88;
+  stroke-dasharray:1 1.1;stroke-dashoffset:1.02;animation:draw .35s ease-out forwards;
+}
+.lines path:nth-child(2){animation-delay:.12s}
+.lines path:nth-child(3){animation-delay:.24s}
+.lines path:nth-child(4){animation-delay:.36s}
+.cells{position:absolute;inset:0;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr)}
+.cell{
+  position:relative;border:0;background:transparent;padding:0;margin:0;
+  cursor:pointer;touch-action:manipulation;border-radius:12px;
+  -webkit-tap-highlight-color:transparent;
+}
+.cell[aria-disabled="true"]{cursor:default}
+.board.over .cell{cursor:pointer}
+.cell:focus-visible{outline:3px solid var(--you);outline-offset:-10px}
+.mark,.ghost{position:absolute;inset:14%;width:72%;height:72%;overflow:visible}
+.mark path,.ghost path{fill:none;stroke-width:8;stroke-linecap:round;stroke-linejoin:round}
+.mark path{stroke-dasharray:1 1.1;stroke-dashoffset:1.02;animation:draw .22s ease-out forwards}
+.mark.x path{stroke:var(--you)}
+.mark.x path:nth-child(2){animation-delay:.17s}
+.mark.o path{stroke:var(--ai);animation-duration:.4s}
+.ghost{opacity:0;transition:opacity .15s}
+.ghost path{stroke:var(--you)}
+.cell.filled .ghost{display:none}
+@media (hover:hover){
+  .board.your-turn .cell:not(.filled):hover .ghost{opacity:.2}
+}
+.cell .mark{transition:opacity .4s .35s}
+.cell.dim .mark{opacity:.25}
+.winsvg path{fill:none;stroke-width:7;stroke-linecap:round;opacity:0}
+.winsvg path.show{opacity:.92;stroke-dasharray:1 1.1;stroke-dashoffset:1.02;animation:draw .45s .2s ease-out forwards}
+.winsvg path.w-you{stroke:var(--you)}
+.winsvg path.w-ai{stroke:var(--ai)}
+@keyframes draw{to{stroke-dashoffset:0}}
+
+.panel{display:grid;gap:22px;min-width:0}
+.scores{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.score{display:grid;gap:2px;align-content:start;min-width:0}
+.who{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.score.sc-you .who{color:var(--you)}
+.score.sc-ai .who{color:var(--ai)}
+.num{font-family:var(--font-mono);font-weight:500;font-size:1.9rem;line-height:1.1;font-variant-numeric:tabular-nums;display:inline-block;transform-origin:left center}
+.score.bump .num{animation:bump .5s ease-out}
+@keyframes bump{0%{transform:scale(1)}35%{transform:scale(1.3)}100%{transform:scale(1)}}
+.tally{min-height:26px;display:block}
+.tally svg{height:26px;width:auto;display:block;overflow:visible}
+.tally path{fill:none;stroke-width:2.6;stroke-linecap:round}
+.sc-you .tally path{stroke:var(--you)}
+.sc-ai .tally path{stroke:var(--ai)}
+.sc-draw .tally path{stroke:var(--muted)}
+.tally path.fresh{stroke-dasharray:1 1.1;stroke-dashoffset:1.02;animation:draw .35s .1s ease-out forwards}
+
+.btn{
+  font-family:var(--font-hand);font-size:1.5rem;line-height:1.2;
+  padding:.35em 1em;width:100%;cursor:pointer;
+  border:2px solid var(--you);background:var(--you);color:var(--paper);
+  border-radius:16px 7px 14px 6px / 7px 14px 6px 16px;
+  transition:transform .12s;touch-action:manipulation;
+}
+.btn:hover{transform:rotate(-.7deg)}
+.btn:active{transform:translateY(1px)}
+.btn:focus-visible{outline:3px solid var(--you);outline-offset:3px}
+.btn.quiet{background:var(--paper);color:var(--graphite);border-color:var(--graphite);border-width:1.5px}
+
+.group{display:grid;gap:8px}
+.group-label{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0}
+.opts{display:flex;flex-wrap:wrap;gap:6px}
+.opts input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
+.opts label{
+  font-size:.95rem;padding:.38em .85em;cursor:pointer;
+  border:1.5px solid var(--graphite);background:var(--paper);color:var(--graphite);
+  border-radius:14px 6px 12px 5px / 6px 12px 5px 14px;
+  user-select:none;-webkit-user-select:none;transition:background .12s,color .12s;
+}
+.opts label:hover{background:var(--grid)}
+.opts input:checked + label{background:var(--graphite);color:var(--paper)}
+.opts input:focus-visible + label{outline:3px solid var(--you);outline-offset:2px}
+.note{margin:0;color:var(--muted);font-size:.88rem;max-width:40ch}
+
+.foot{display:flex;flex-wrap:wrap;gap:8px 20px;align-items:center}
+.link-btn{
+  background:none;border:0;padding:4px 0;cursor:pointer;
+  color:var(--muted);font:inherit;font-size:.9rem;
+  text-decoration:underline;text-decoration-style:dotted;text-underline-offset:4px;
+}
+.link-btn.install{color:var(--you);text-decoration-style:solid}
+.link-btn.armed{color:var(--ai);text-decoration-style:solid}
+.link-btn:focus-visible{outline:3px solid var(--you);outline-offset:3px;border-radius:4px}
+
+@media (prefers-reduced-motion:reduce){
+  .lines path,.mark path,.winsvg path.show,.tally path.fresh{animation:none!important;stroke-dashoffset:0!important}
+  .dots span,.score.bump .num{animation:none!important}
+  .btn,.cell .mark,.ghost{transition:none!important}
+}
+</style>
+</head>
+<body>
+<main class="page">
+  <header class="head">
+    <h1>Tic-Tac-Toe</h1>
+    <p class="matchup">
+      <span class="tag t-you"><svg viewBox="0 0 100 100" aria-hidden="true"><path d="M18 18 L82 82"/><path d="M82 18 L18 82"/></svg>Du</span>
+      <span>gegen</span>
+      <span class="tag t-ai"><svg viewBox="0 0 100 100" aria-hidden="true"><path d="M50 12 C 72 12, 88 28, 88 50 C 88 72, 72 88, 50 88 C 28 88, 12 72, 12 50 C 12 28, 28 12, 50 12"/></svg>KI</span>
+    </p>
+  </header>
+
+  <div class="layout">
+    <section class="play" aria-label="Spiel">
+      <p id="status" class="status" aria-live="polite"></p>
+      <p id="hint" class="hint"></p>
+      <div class="board" id="board" role="group" aria-label="Spielfeld, 3 mal 3 Felder">
+        <svg class="lines" viewBox="0 0 300 300" aria-hidden="true">
+          <path pathLength="1" d="M101 10 C 99 100, 103 200, 100 291"/>
+          <path pathLength="1" d="M200 8 C 202 110, 198 210, 201 289"/>
+          <path pathLength="1" d="M9 100 C 110 98, 200 103, 292 101"/>
+          <path pathLength="1" d="M11 201 C 100 203, 210 197, 290 199"/>
+        </svg>
+        <div class="cells" id="cells"></div>
+        <svg class="winsvg" viewBox="0 0 300 300" aria-hidden="true"><path id="winline" pathLength="1" d=""/></svg>
+      </div>
+    </section>
+
+    <aside class="panel" aria-label="Spielstand und Einstellungen">
+      <section class="scores" aria-label="Spielstand">
+        <div class="score sc-you" id="sc-you"><span class="who">Du</span><span class="num" id="n-you">0</span><span class="tally" id="t-you"></span></div>
+        <div class="score sc-draw" id="sc-draw"><span class="who">Unentschieden</span><span class="num" id="n-draw">0</span><span class="tally" id="t-draw"></span></div>
+        <div class="score sc-ai" id="sc-ai"><span class="who">KI</span><span class="num" id="n-ai">0</span><span class="tally" id="t-ai"></span></div>
+      </section>
+
+      <button type="button" class="btn" id="next">Nächste Runde</button>
+
+      <div class="group">
+        <p class="group-label" id="lbl-level">Schwierigkeit</p>
+        <div class="opts" role="radiogroup" aria-labelledby="lbl-level">
+          <input type="radio" name="level" id="lvl-leicht" value="leicht"><label for="lvl-leicht">Leicht</label>
+          <input type="radio" name="level" id="lvl-mittel" value="mittel"><label for="lvl-mittel">Mittel</label>
+          <input type="radio" name="level" id="lvl-unschlagbar" value="unschlagbar"><label for="lvl-unschlagbar">Unschlagbar</label>
+        </div>
+        <p class="note" id="levelNote"></p>
+      </div>
+
+      <div class="group">
+        <p class="group-label" id="lbl-start">Wer beginnt?</p>
+        <div class="opts" role="radiogroup" aria-labelledby="lbl-start">
+          <input type="radio" name="starter" id="st-wechsel" value="wechsel"><label for="st-wechsel">Abwechselnd</label>
+          <input type="radio" name="starter" id="st-ich" value="ich"><label for="st-ich">Immer ich</label>
+          <input type="radio" name="starter" id="st-ki" value="ki"><label for="st-ki">Immer die KI</label>
+        </div>
+      </div>
+
+      <div class="foot">
+        <button type="button" class="link-btn install" id="install" hidden>App installieren</button>
+        <button type="button" class="link-btn" id="reset">Punktestand zurücksetzen</button>
+      </div>
+    </aside>
+  </div>
+</main>
+
+<script>
+(function(){
+  var LINES=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+  var HUMAN='X', AI='O', KEY='ttt-ki-v1';
+  var LEVELS=['leicht','mittel','unschlagbar'], STARTERS=['wechsel','ich','ki'];
+  var NOTES={
+    leicht:'Die KI setzt meistens zufällig. Gut zum Aufwärmen.',
+    mittel:'Die KI nutzt ihre Chancen und blockt dich oft.',
+    unschlagbar:'Die KI rechnet jeden Zug durch. Mehr als ein Unentschieden ist nicht drin.'
+  };
+  var NAMES=['oben links','oben Mitte','oben rechts','Mitte links','Mitte','Mitte rechts','unten links','unten Mitte','unten rechts'];
+  var XD1='M25 24 C 41 41, 58 59, 76 77', XD2='M75 23 C 59 40, 42 58, 24 76';
+  var OD='M53 19 C 73 19, 83 35, 81 53 C 79 71, 65 82, 48 81 C 30 80, 18 66, 19 48 C 20 31, 33 21, 57 22';
+
+  var state={board:[null,null,null,null,null,null,null,null,null],turn:HUMAN,over:false,result:null,line:null,
+    lastStarter:null,scores:{you:0,draw:0,ai:0},level:'mittel',starter:'wechsel'};
+  var aiTimer=null, thinking=false, lastScored=null, resetArmed=null, resetMsgTimer=null;
+  var drawn=[null,null,null,null,null,null,null,null,null], drawnLine='', prevCounts={you:-1,draw:-1,ai:-1};
+
+  function $(id){return document.getElementById(id)}
+  var cellsEl=$('cells'), boardEl=$('board'), statusEl=$('status'), hintEl=$('hint'),
+      nextBtn=$('next'), winPath=$('winline'), resetBtn=$('reset'), installBtn=$('install');
+
+  /* ---------- Speicher (nur auf diesem Gerät) ---------- */
+  function load(){
+    try{
+      var raw=localStorage.getItem(KEY); if(!raw) return;
+      var d=JSON.parse(raw);
+      if(d && d.scores){['you','draw','ai'].forEach(function(k){ if(typeof d.scores[k]==='number') state.scores[k]=d.scores[k]; });}
+      if(d && LEVELS.indexOf(d.level)>=0) state.level=d.level;
+      if(d && STARTERS.indexOf(d.starter)>=0) state.starter=d.starter;
+    }catch(e){}
+  }
+  function save(){
+    try{ localStorage.setItem(KEY,JSON.stringify({scores:state.scores,level:state.level,starter:state.starter})); }catch(e){}
+  }
+
+  /* ---------- Spiellogik ---------- */
+  function check(b){
+    for(var n=0;n<LINES.length;n++){
+      var l=LINES[n];
+      if(b[l[0]] && b[l[0]]===b[l[1]] && b[l[0]]===b[l[2]]) return {p:b[l[0]],line:l};
+    }
+    for(var i=0;i<9;i++){ if(!b[i]) return null; }
+    return {p:'draw',line:null};
+  }
+  function emptyCells(b){ var r=[]; for(var i=0;i<9;i++){ if(!b[i]) r.push(i); } return r; }
+  function pick(a){ return a[Math.floor(Math.random()*a.length)]; }
+
+  function minimax(b,player,depth,alpha,beta){
+    var w=check(b);
+    if(w) return w.p===AI ? 10-depth : (w.p===HUMAN ? depth-10 : 0);
+    var i,v;
+    if(player===AI){
+      v=-Infinity;
+      for(i=0;i<9;i++){
+        if(b[i]) continue;
+        b[i]=AI; v=Math.max(v,minimax(b,HUMAN,depth+1,alpha,beta)); b[i]=null;
+        alpha=Math.max(alpha,v); if(alpha>=beta) break;
+      }
+      return v;
+    }
+    v=Infinity;
+    for(i=0;i<9;i++){
+      if(b[i]) continue;
+      b[i]=HUMAN; v=Math.min(v,minimax(b,AI,depth+1,alpha,beta)); b[i]=null;
+      beta=Math.min(beta,v); if(alpha>=beta) break;
+    }
+    return v;
+  }
+  function perfectMoves(b){
+    var free=emptyCells(b), best=-Infinity, moves=[];
+    free.forEach(function(i){
+      b[i]=AI; var s=minimax(b,HUMAN,1,-Infinity,Infinity); b[i]=null;
+      if(s>best){best=s;moves=[i];} else if(s===best){moves.push(i);}
+    });
+    return moves;
+  }
+  function immediate(b,p){
+    var free=emptyCells(b);
+    for(var n=0;n<free.length;n++){
+      var i=free[n]; b[i]=p; var w=check(b); b[i]=null;
+      if(w && w.p===p) return i;
+    }
+    return -1;
+  }
+  function chooseMove(){
+    var b=state.board.slice(), free=emptyCells(b), win, block;
+    if(state.level==='unschlagbar') return pick(perfectMoves(b));
+    if(state.level==='mittel'){
+      win=immediate(b,AI); if(win>=0) return win;
+      block=immediate(b,HUMAN); if(block>=0 && Math.random()<0.85) return block;
+      return Math.random()<0.5 ? pick(perfectMoves(b)) : pick(free);
+    }
+    win=immediate(b,AI); if(win>=0 && Math.random()<0.4) return win;
+    return Math.random()<0.2 ? pick(perfectMoves(b)) : pick(free);
+  }
+
+  function play(i,p){
+    state.board[i]=p;
+    var w=check(state.board);
+    if(w){ finish(w); } else { state.turn = (p===HUMAN ? AI : HUMAN); }
+    render();
+    if(!state.over && state.turn===AI) scheduleAI();
+  }
+  function finish(w){
+    state.over=true; state.result=w.p; state.line=w.line;
+    if(w.p===HUMAN){state.scores.you++;lastScored='you';}
+    else if(w.p===AI){state.scores.ai++;lastScored='ai';}
+    else {state.scores.draw++;lastScored='draw';}
+    save();
+  }
+  function scheduleAI(){
+    clearTimeout(aiTimer); thinking=true; render();
+    aiTimer=setTimeout(function(){
+      thinking=false;
+      if(state.over || state.turn!==AI) return;
+      play(chooseMove(),AI);
+    }, 450+Math.random()*350);
+  }
+  function newRound(restart){
+    clearTimeout(aiTimer); thinking=false; lastScored=null;
+    var first;
+    if(state.starter==='ich') first=HUMAN;
+    else if(state.starter==='ki') first=AI;
+    else if(restart && state.lastStarter) first=state.lastStarter;
+    else first = state.lastStarter===HUMAN ? AI : HUMAN;
+    state.lastStarter=first;
+    state.board=[null,null,null,null,null,null,null,null,null];
+    state.turn=first; state.over=false; state.result=null; state.line=null;
+    render();
+    if(first===AI) scheduleAI();
+  }
+
+  /* ---------- Darstellung ---------- */
+  function markHTML(v){
+    var rot=(Math.random()*10-5).toFixed(1);
+    var cls=v===HUMAN?'x':'o';
+    var inner=v===HUMAN
+      ? '<path pathLength="1" d="'+XD1+'"/><path pathLength="1" d="'+XD2+'"/>'
+      : '<path pathLength="1" d="'+OD+'"/>';
+    return '<svg class="mark '+cls+'" viewBox="0 0 100 100" aria-hidden="true" style="transform:rotate('+rot+'deg)">'+inner+'</svg>';
+  }
+  function buildCells(){
+    var h='';
+    for(var i=0;i<9;i++){
+      h+='<button type="button" class="cell" id="cell-'+i+'" data-i="'+i+'" aria-label="'+NAMES[i]+': frei">'+
+         '<svg class="ghost" viewBox="0 0 100 100" aria-hidden="true"><path d="'+XD1+'"/><path d="'+XD2+'"/></svg></button>';
+    }
+    cellsEl.innerHTML=h;
+  }
+  function cellLabel(i,v){
+    return NAMES[i]+': '+(v===HUMAN?'dein Kreuz':(v===AI?'Kreis der KI':'frei'));
+  }
+  function winD(line){
+    function c(i){return [50+(i%3)*100, 50+Math.floor(i/3)*100];}
+    var a=c(line[0]), b=c(line[2]), dx=b[0]-a[0], dy=b[1]-a[1], len=Math.sqrt(dx*dx+dy*dy), ux=dx/len, uy=dy/len, ext=34;
+    var sx=a[0]-ux*ext, sy=a[1]-uy*ext, ex=b[0]+ux*ext, ey=b[1]+uy*ext;
+    var mx=(sx+ex)/2-uy*5, my=(sy+ey)/2+ux*5;
+    return 'M'+sx.toFixed(1)+' '+sy.toFixed(1)+' Q '+mx.toFixed(1)+' '+my.toFixed(1)+' '+ex.toFixed(1)+' '+ey.toFixed(1);
+  }
+  function tally(n,fresh){
+    var shown=Math.min(n,15); if(!shown) return '';
+    var groups=Math.ceil(shown/5), parts=[];
+    for(var g=0;g<groups;g++){
+      var inG=Math.min(5,shown-g*5), ox=g*36;
+      for(var k=0;k<Math.min(4,inG);k++){
+        var x=ox+6+k*7;
+        parts.push('M'+x+' 6 L'+(x+(k%2?0.8:-0.6))+' 28');
+      }
+      if(inG===5) parts.push('M'+(ox+1)+' 24 L'+(ox+33)+' 10');
+    }
+    var html=parts.map(function(d,idx){
+      return '<path pathLength="1"'+(fresh&&idx===parts.length-1?' class="fresh"':'')+' d="'+d+'"/>';
+    }).join('');
+    return '<svg viewBox="0 0 '+(groups*36)+' 34" aria-hidden="true">'+html+'</svg>';
+  }
+
+  function render(){
+    var empty=state.board.every(function(v){return !v;});
+    var buttons=cellsEl.querySelectorAll('.cell');
+    for(var i=0;i<buttons.length;i++){
+      var btn=buttons[i], v=state.board[i];
+      if(v!==drawn[i]){
+        var old=btn.querySelector('.mark'); if(old) old.remove();
+        if(v) btn.insertAdjacentHTML('beforeend',markHTML(v));
+        drawn[i]=v;
+      }
+      btn.classList.toggle('filled',!!v);
+      btn.classList.toggle('dim', state.over && (state.result==='draw' || (!!state.line && state.line.indexOf(i)<0)));
+      btn.setAttribute('aria-label',cellLabel(i,v));
+      btn.setAttribute('aria-disabled', (!state.over && (v || state.turn!==HUMAN || thinking)) ? 'true' : 'false');
+    }
+    boardEl.classList.toggle('your-turn', !state.over && state.turn===HUMAN && !thinking);
+    boardEl.classList.toggle('over', state.over);
+
+    var key=state.line ? state.line.join('-')+state.result : '';
+    if(key!==drawnLine){
+      winPath.classList.remove('show','w-you','w-ai');
+      if(state.line){
+        winPath.setAttribute('d',winD(state.line));
+        winPath.classList.add(state.result===HUMAN?'w-you':'w-ai');
+        void winPath.getBoundingClientRect();
+        winPath.classList.add('show');
+      } else {
+        winPath.setAttribute('d','');
+      }
+      drawnLine=key;
+    }
+
+    var text, cls='', dots=false;
+    if(state.over){
+      if(state.result===HUMAN){text='Gewonnen! Drei in einer Reihe.';cls='s-you';}
+      else if(state.result===AI){text='Die KI gewinnt diese Runde.';cls='s-ai';}
+      else {text='Unentschieden.';}
+    } else if(state.turn===AI){
+      text=empty?'Die KI beginnt':'Die KI überlegt'; cls='s-ai'; dots=true;
+    } else {
+      text=empty?'Du beginnst. Setz dein Kreuz.':'Du bist am Zug.'; cls='s-you';
+    }
+    statusEl.className='status '+cls;
+    statusEl.innerHTML=text+(dots?'<span class="dots" aria-hidden="true"><span>.</span><span>.</span><span>.</span></span>':'');
+
+    if(state.over){
+      hintEl.textContent = (state.level==='unschlagbar' && state.result!==HUMAN)
+        ? 'Gegen die unschlagbare KI ist ein Unentschieden das beste Ergebnis. Tippe aufs Spielfeld für die nächste Runde.'
+        : 'Tippe aufs Spielfeld oder auf „Nächste Runde“.';
+    } else {
+      hintEl.textContent='Drei gleiche Zeichen in einer Reihe gewinnen: waagerecht, senkrecht oder diagonal.';
+    }
+
+    nextBtn.textContent=state.over?'Nächste Runde':'Neu starten';
+    nextBtn.classList.toggle('quiet',!state.over);
+
+    ['you','draw','ai'].forEach(function(k){
+      var n=state.scores[k];
+      if(n===prevCounts[k]) return;
+      var fresh=lastScored===k && prevCounts[k]>=0 && n===prevCounts[k]+1;
+      $('n-'+k).textContent=n;
+      $('t-'+k).innerHTML=tally(n,fresh);
+      if(fresh){ var card=$('sc-'+k); card.classList.remove('bump'); void card.offsetWidth; card.classList.add('bump'); }
+      prevCounts[k]=n;
+    });
+  }
+
+  function syncControls(){
+    var lv=$('lvl-'+state.level); if(lv) lv.checked=true;
+    var st=$('st-'+state.starter); if(st) st.checked=true;
+    $('levelNote').textContent=NOTES[state.level];
+  }
+
+  /* ---------- Eingaben ---------- */
+  cellsEl.addEventListener('click',function(e){
+    var btn=e.target.closest('.cell'); if(!btn) return;
+    if(state.over){ newRound(false); return; }
+    var i=+btn.dataset.i;
+    if(state.turn!==HUMAN || thinking || state.board[i]) return;
+    play(i,HUMAN);
+  });
+  cellsEl.addEventListener('keydown',function(e){
+    var btn=e.target.closest('.cell'); if(!btn) return;
+    var i=+btn.dataset.i, r=Math.floor(i/3), c=i%3;
+    if(e.key==='ArrowUp') r=(r+2)%3;
+    else if(e.key==='ArrowDown') r=(r+1)%3;
+    else if(e.key==='ArrowLeft') c=(c+2)%3;
+    else if(e.key==='ArrowRight') c=(c+1)%3;
+    else return;
+    e.preventDefault(); $('cell-'+(r*3+c)).focus();
+  });
+  nextBtn.addEventListener('click',function(){ newRound(!state.over); });
+
+  document.querySelectorAll('input[name="level"]').forEach(function(inp){
+    inp.addEventListener('change',function(){
+      state.level=inp.value; save(); $('levelNote').textContent=NOTES[state.level];
+    });
+  });
+  document.querySelectorAll('input[name="starter"]').forEach(function(inp){
+    inp.addEventListener('change',function(){
+      state.starter=inp.value; save();
+      var untouched=!state.over && state.board.every(function(v){return !v;});
+      if(untouched && state.starter!=='wechsel') newRound(true);
+    });
+  });
+
+  resetBtn.addEventListener('click',function(){
+    clearTimeout(resetMsgTimer);
+    if(!resetArmed){
+      resetBtn.textContent='Wirklich zurücksetzen? Nochmal tippen';
+      resetBtn.classList.add('armed');
+      resetArmed=setTimeout(function(){
+        resetArmed=null; resetBtn.classList.remove('armed');
+        resetBtn.textContent='Punktestand zurücksetzen';
+      },3000);
+      return;
+    }
+    clearTimeout(resetArmed); resetArmed=null;
+    state.scores={you:0,draw:0,ai:0}; lastScored=null; save(); render();
+    resetBtn.classList.remove('armed');
+    resetBtn.textContent='Punktestand ist zurückgesetzt';
+    resetMsgTimer=setTimeout(function(){ resetBtn.textContent='Punktestand zurücksetzen'; },1800);
+  });
+
+  /* ---------- App-Installation (Chrome, Edge, Android) ---------- */
+  var deferredPrompt=null;
+  window.addEventListener('beforeinstallprompt',function(e){
+    e.preventDefault(); deferredPrompt=e; installBtn.hidden=false;
+  });
+  installBtn.addEventListener('click',function(){
+    if(!deferredPrompt) return;
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.finally(function(){ deferredPrompt=null; installBtn.hidden=true; });
+  });
+  window.addEventListener('appinstalled',function(){ installBtn.hidden=true; });
+
+  if('serviceWorker' in navigator && location.protocol!=='file:'){
+    window.addEventListener('load',function(){
+      navigator.serviceWorker.register('sw.js').catch(function(){});
+    });
+  }
+
+  /* ---------- Start ---------- */
+  load(); buildCells(); syncControls(); newRound(false);
+})();
+</script>
+</body>
+</html>
